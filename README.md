@@ -7,4 +7,9 @@ Public health officials can greatly benefit their communities by taking into acc
 ### Repo Overview
 
 - data/ contains all of the data used for this project excluding the census data file because it was too large. For details on where the data was retrieved from, please check out the paper pdf.
-- figures/ contains some of the figures used in the paper
+- figures/ contains most of the figures used in the paper
+- RCode/ contains all of the code used for this project
+	- the majority of the code exists in the file ce_ranking.R
+	- ce_frequentist_ranking.R contains some scratch work of frequentist ranking methods
+	- ce_EDA.Rmd consits of data cleaning and EDA work
+- lepikhina_ksenia_ce.pdf is the final CE paper
