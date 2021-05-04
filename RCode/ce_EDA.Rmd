@@ -1,0 +1,210 @@
+---
+title: "CE EDA"
+output: html_notebook
+---
+```{r}
+library(readxl)  # install.packages("readxl") or install.packages("tidyverse")
+library(plyr)
+library(tibble)
+library(data.table)
+library(dplyr)
+```
+
+Read state to state abbr data
+```{r}
+state_name_abbr = read.table(file='~/Documents/CE/state_to_abbr.csv',header = TRUE, sep=',')
+cols_to_be_rectified <- names(state_name_abbr)[vapply(state_name_abbr, is.character, logical(1))]
+state_name_abbr[,cols_to_be_rectified] <- lapply(state_name_abbr[,cols_to_be_rectified], trimws)
+```
+
+
+Read files -- Using:
+- Urbanization classification from 2013
+- County Health Rankings from 2013
+- Census Data 2010-2019 but specifically 2013
+
+```{r}
+urb = read.table(file='~/Documents/CE/urbanization_classification.csv',header = TRUE, sep=',')
+
+urb = left_join(urb, state_name_abbr, by = "State.Abr.")
+drops = c("State.Abr.", "CBSA.title", "CBSA.2012.pop", "County.2012.pop", "X1990.based.code", "X")
+urb = urb[ , !(names(urb) %in% drops)]
+colnames(urb) <- c("FIPS", "County", "urb_code_2013", "urb_code_2006", "State")
+urb$County = gsub("(.*?)\\sCounty$", "\\1", urb$County)
+urb[,3] <- sapply(urb[,3],as.factor)
+urb[,4] <- sapply(urb[,4],as.factor)
+
+h_ranks = as.data.table(read_excel(path = "~/Documents/CE/county_health_rankings_2013.xls", sheet=3))
+header.true <- function(df) {
+  names(df) <- as.character(unlist(df[1,]))
+  df[-1,]
+}
+h_ranks = header.true(h_ranks)
+h_ranks[, 1] <- sapply(h_ranks[, 1], as.integer)
+colnames(h_ranks) <- c("FIPS", "State", "County", "Mortality_Z_Score", "Mortality_Rank", "Morbidity_Z_Score", "Morbidity_Rank", "Health_Behaviors_Z_Score", "Health_Behaviors_Rank", "Clinical_Care_Z_Score", "Clinical_Care_Rank", "Soc_Econ_Factors_Z_Score", "Soc_Econ_Factors_Rank", "Physical_Env_Z_Score", "Physical_Env_Rank")
+h_ranks=h_ranks[!is.na(h_ranks$County),]
+h_ranks[,4:15] <- lapply(h_ranks[,4:15],as.numeric)
+
+h_factors = as.data.table(read_excel(path = "~/Documents/CE/county_health_rankings_2013.xls", sheet=4))
+h_factors = header.true(h_factors)
+h_factors[, 1] <- sapply(h_factors[, 1], as.integer)
+h_factors=h_factors[!is.na(h_factors$County),]
+h_factors = h_factors[,!c(4:30)]
+h_factors = h_factors[,!c(6:8,10:12,14:16,19:21,24:26,29,33:35,38:40,44,51,54:56,59:61,64:66,68,72:74,78,81:83,86:88,91:94,97,99,102,105,108,111)]
+h_factors = h_factors[,!c(20,21,23:27)]
+h_factors = h_factors[,!c(24,29,46)]
+# h_factors = h_factors[-ix, ]#subset(h_factors, select=-c("PCP Rate","PCP Ratio"))
+colnames(h_factors) <- c("FIPS", "State", "County",
+                         "Smoker_Sample_Size", "Perc_Smoker", "Perc_Obese",
+                         "Perc_Phys_Inactive", "Excessive_Drinking_Sample_Size", "Perc_Excessive_Drinking",
+                         "MV_Deaths", "MV_Mortality_Rate", "Chlamydia_Cases",
+                         "Chlamydia_Rate", "Teen_Births", "Teen_Pop",
+                         "Teen_Birth_Rate", "Uninsured", "Perc_Uninsured",
+                         "Num_Physicians", "Num_Dentists", "Num_Medicare_Enrolled_Amb_Care",
+                         "Amb_Care_Rate", "Num_Diabetics", "Num_Medicare_Enrolled_Mammography",
+                         "Perc_Mammography", "Perc_HS_Grad", "Num_Some_College",
+                         "Perc_Some_College", "Num_Unemployed", "Labor_Force",
+                         "Perc_Unemployed", "Num_Children_Poverty", "Perc_Children_Poverty",
+                         "Inadeq_Social_Support_Sample_Size", "Perc_No_Social_Support",
+                         "Num_Single_Parent_House",
+                         "Num_Households", "Annual_Violent_Crimes", "Violent_Crime_Rate",
+                         "Avg_Daily_Particulate_Matter", "Perc_Pop_In_Violation_Drinking_Water_Safety",
+                         "Num_Pop_In_Violation_Drinking_Water_Safety",
+                         "Num_Rec_Fac", "Num_Limited_Access_To_Healthy_Food",
+                         "Perc_Limited_Access_To_Healthy_Food", "Num_Fast_Food", "Perc_Fast_Food")
+h_factors[,4:47] <- lapply(h_factors[,4:47],as.numeric)
+
+demographics = as.data.table(read_excel(path = "~/Documents/CE/county_health_rankings_2013.xls", sheet=5))[, (16:61) := NULL]
+demographics = header.true(demographics)
+colnames(demographics) <- c("FIPS", "State", "County", "Population", "perc_under_18", "perc_over_65", "perc_AfAm", "perc_AmIn_AlNa", "perc_As", "perc_NaHI_PaIs", "perc_Hisp", "perc_NonHispWh", "non_profi_en", "perc_non_profi_en", "perc_female")
+demographics=demographics[!is.na(demographics$County),]
+demographics[, 1] <- sapply(demographics[, 1], as.integer)
+demographics[,4:15] <- lapply(demographics[,4:15],as.numeric)
+
+h_outcomes = as.data.table(read_excel(path = "~/Documents/CE/county_health_rankings_2013.xls", sheet=4))[, (31:138) := NULL]
+h_outcomes = header.true(h_outcomes)
+h_outcomes = header.true(h_outcomes)
+h_outcomes[, 1] <- sapply(h_outcomes[, 1], as.integer)
+colnames(h_outcomes) <- c("FIPS", "State", "County", "premature_deaths", "premature_death_YPLL_rate", "premature_death_YPLL_rate_CI_low", "premature_death_YPLL_rate_CI_high", "premature_death_YPLL_rate_Z_score", "poor_health_sample_size", "poor_health_perc", "poor_health_CI_low", "poor_health_CI_high", "poor_health_Z_score", "poor_phys_health_sample_size", "poor_phys_health_avg_over_30_days", "poor_phys_health_avg_over_30_days_CI_low", "poor_phys_health_avg_over_30_days_CI_high", "poor_phys_health_avg_over_30_days_Z_score", "poor_ment_health_sample_size", "poor_ment_health_avg_over_30_days", "poor_ment_health_avg_over_30_days_CI_low", "poor_ment_health_avg_over_30_days_CI_high", "poor_ment_health_avg_over_30_days_Z_score", "unreliable_data", "low_birthweight_births", "live_births", "low_birthweight_perc", "low_birthweight_perc_CI_low", "low_birthweight_perc_CI_high", "low_birthweight_perc_Z_score")
+h_outcomes=h_outcomes[!is.na(h_outcomes$County),]
+h_outcomes[,4:23] <- lapply(h_outcomes[,4:23],as.numeric)
+h_outcomes$unreliable_data <- ifelse(grepl("x", h_outcomes$unreliable_data), 1, 0)
+h_outcomes$unreliable_data <- sapply(h_outcomes$unreliable_data,as.factor)
+h_outcomes[,25:30] <- lapply(h_outcomes[,25:30],as.numeric)
+
+merge_cols <- c("FIPS", "County", "State")
+
+df  <- merge(h_ranks, h_outcomes, by = merge_cols, all.x = TRUE)
+df  <- merge(df, demographics, by = merge_cols, all.x = TRUE)
+df  <- merge(df, urb, by = merge_cols, all.x = TRUE)
+df  <- merge(df, h_factors, by = merge_cols, all.x = TRUE)
+df[,1]  <- sapply(demographics[,1],as.factor)
+# df$under_18 <- with(df, Population * perc_under_18)
+# df$over_65 <- with(df, Population * perc_over_65)
+# df$AfAm <- with(df, Population * perc_AfAm)
+# df$AmIn_AlNa <- with(df, Population * perc_AmIn_AlNa)
+# df$As <- with(df, Population * perc_As)
+# df$NaHI_PaIs <- with(df, Population * perc_NaHI_PaIs)
+# df$Hisp <- with(df, Population * perc_Hisp)
+# df$NonHispWh <- with(df, Population * perc_NonHispWh)
+# df$female <- with(df, Population * perc_female)
+# df$male <- with(df, Population * (100-perc_female))
+
+# census = read.table(file='~/Documents/CE/census_est_2010-2019.csv', header = TRUE, sep=',')
+# census=census[(census$YEAR==6),]
+# drops = c("SUMLEV", "STATE", "YEAR")
+# census = census[ , !(names(census) %in% drops)]
+# 
+# # keeps <- c("COUNTY", "STNAME", "CTYNAME", "AGEGRP", "TOT_POP", "TOT_MALE", "TOT_FEMALE",)
+# census = sapply(census[,grep("^WA.*_MALE$",names(census))],sum)
+# census = census[keeps]
+```
+
+
+Categories
+```{r}
+# df$Mortality_Rank <- as.factor(df$Mortality_Rank)
+# df$Morbidity_Rank <- as.factor(df$Morbidity_Rank)
+# df$Health_Behaviors_Rank <- as.factor(df$Health_Behaviors_Rank)
+# df$Clinical_Care_Rank <- as.factor(df$Clinical_Care_Rank)
+# df$Soc_Econ_Factors_Rank <- as.factor(df$Soc_Econ_Factors_Rank)
+# df$Physical_Env_Rank <- as.factor(df$Physical_Env_Rank)
+
+num_cols <- unlist(lapply(df, is.numeric))
+num_df <- df[ , ..num_cols]
+# num_df$Mortality_Rank = df$Mortality_Rank
+# num_df$Morbidity_Rank = df$Morbidity_Rank
+# num_df$Health_Behaviors_Rank = df$Health_Behaviors_Rank
+# num_df$Clinical_Care_Rank = df$Clinical_Care_Rank
+# num_df$Soc_Econ_Factors_Rank = df$Soc_Econ_Factors_Rank
+# num_df$Physical_Env_Rank = df$Physical_Env_Rank
+
+str_cols <- !num_cols  
+str_df <- df[ , ..str_cols]
+# str_df$Mortality_Rank = df$Mortality_Rank
+# str_df$Morbidity_Rank = df$Morbidity_Rank
+# str_df$Health_Behaviors_Rank = df$Health_Behaviors_Rank
+# str_df$Clinical_Care_Rank = df$Clinical_Care_Rank
+# str_df$Soc_Econ_Factors_Rank = df$Soc_Econ_Factors_Rank
+# str_df$Physical_Env_Rank = df$Physical_Env_Rank
+# non_num = c("FIPS", "County", "State", "urb_code_2013", "urb_code_2006")
+# exclude_z_score_rank = c("Mortality_Rank", "Morbidity_Z_Score", "Morbidity_Rank", "Health_Behaviors_Z_Score", "Health_Behaviors_Rank", "Clinical_Care_Z_Score", "Clinical_Care_Rank", "Soc_Econ_Factors_Z_Score", "Soc_Econ_Factors_Rank", "Physical_Env_Z_Score", "Physical_Env_Rank")
+# num_list= c("Population", "under_18", "over_65", "AfAm", "AmIn_AlNa", "As", "NaHI_PaIs", "Hisp", "NonHispWh", "non_profi_en", "female", "male")
+```
+
+EDA
+```{r}
+
+non_rank_CI_Zscore = !num_df[ , grepl( "(?:_Z_(?:s|S)core|CI|(?:s|S)ize|(?:n|N)um)" , names( num_df ) ) ]
+
+
+tmp = num_df[,..non_rank_CI_Zscore]
+tmp$Mortality_Rank = df$Mortality_Rank
+tmp$Morbidity_Rank = df$Morbidity_Rank
+tmp$Health_Behaviors_Rank = df$Health_Behaviors_Rank
+tmp$Clinical_Care_Rank = df$Clinical_Care_Rank
+tmp$Soc_Econ_Factors_Rank = df$Soc_Econ_Factors_Rank
+tmp$Physical_Env_Rank = df$Physical_Env_Rank
+# tmp = tmp[,c()]
+pairs(num_df[,..non_rank_CI_Zscore])
+
+```
+
+```{r}
+#Look at which variables are good predictors for the 5 health outcomes
+tmp=tmp[!is.na(tmp$Mortality_Rank),]
+tmp=tmp[!is.na(tmp$Morbidity_Rank),]
+tmp=tmp[!is.na(tmp$Health_Behaviors_Rank),]
+tmp=tmp[!is.na(tmp$Clinical_Care_Rank),]
+tmp=tmp[!is.na(tmp$Soc_Econ_Factors_Rank),]
+tmp=tmp[!is.na(tmp$Physical_Env_Rank),]
+lmod.mortality.rank = glm(Mortality_Rank ~ . - Morbidity_Rank - Health_Behaviors_Rank -
+                      Clinical_Care_Rank - Soc_Econ_Factors_Rank - Physical_Env_Rank - Population,
+                    data=tmp, family=poisson(), offset = log(Population))
+# fit <- glm(count ~ x1+x2+x3, data=mydata, family=poisson())
+lmod.morbidity.rank = glm(Morbidity_Rank ~ .  -Mortality_Rank - Health_Behaviors_Rank -
+                      Clinical_Care_Rank - Soc_Econ_Factors_Rank - Physical_Env_Rank - Population,
+                    data=tmp, family=poisson(), offset = log(Population))
+lmod.health_behavior.rank = glm(Health_Behaviors_Rank ~ . - Mortality_Rank - Morbidity_Rank -
+                      Clinical_Care_Rank - Soc_Econ_Factors_Rank - Physical_Env_Rank - Population,
+                    data=tmp, family=poisson(), offset = log(Population))
+lmod.clinical_care.rank = glm(Clinical_Care_Rank ~ . - Mortality_Rank - Morbidity_Rank -
+                      Health_Behaviors_Rank - Soc_Econ_Factors_Rank - Physical_Env_Rank - Population,
+                    data=tmp, family=poisson(), offset = log(Population))
+lmod.soc_econ.rank = glm(Soc_Econ_Factors_Rank ~ . - Mortality_Rank - Morbidity_Rank -
+                      Health_Behaviors_Rank - Clinical_Care_Rank - Physical_Env_Rank - Population,
+                    data=tmp, family=poisson(), offset = log(Population))
+lmod.physical.rank = glm(Physical_Env_Rank ~ . - Mortality_Rank - Morbidity_Rank -
+                      Health_Behaviors_Rank - Clinical_Care_Rank - Soc_Econ_Factors_Rank - Population,
+                    data=tmp, family=poisson(), offset = log(Population))
+```
+
+
+```{r}
+summary(lmod.mortality.rank)
+summary(lmod.morbidity.rank)
+summary(lmod.health_behavior.rank)
+summary(lmod.clinical_care.rank)
+summary(lmod.soc_econ.rank)
+summary(lmod.physical.rank)
+```
